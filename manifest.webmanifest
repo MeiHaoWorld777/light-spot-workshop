@@ -1,0 +1,13 @@
+{
+  "name": "光斑小工坊",
+  "short_name": "光斑工坊",
+  "description": "瑞吉欧儿童光影工坊",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#FAF4E8",
+  "theme_color": "#FAF4E8",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

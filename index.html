@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#FAF4E8">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>光斑小工坊</title>
+<style>
+  :root {
+    --cream: #FAF4E8;
+    --ink: #6E675C;
+    --ink-soft: #9A9284;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--cream); }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Yuanti SC", "YouYuan", "Microsoft YaHei", sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* ---------- 全屏氛围层 ---------- */
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+  #vignette { background: radial-gradient(ellipse at 42% 38%, rgba(255,250,238,0) 52%, rgba(214,196,168,0.10) 100%); z-index: 3; }
+  #duskDim { background: #2A2438; opacity: 0; transition: opacity 1.2s; z-index: 3; }
+  #flash { background: #FFF6E4; opacity: 0; z-index: 9; }
+  #cream { background: var(--cream); z-index: 8; }
+  #sweep {
+    z-index: 8; opacity: 0;
+    background: linear-gradient(92deg, rgba(255,248,235,0) 0%, rgba(255,249,238,0.95) 46%, rgba(255,244,224,0.98) 54%, rgba(255,248,235,0) 100%);
+    background-size: 220% 100%; background-position: -120% 0;
+  }
+
+  /* ---------- 标题 ---------- */
+  #titleWrap {
+    position: fixed; left: 50%; top: 9%; transform: translateX(-50%);
+    z-index: 7; pointer-events: none; opacity: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #titleWrap img { width: min(46vw, 420px); min-width: 250px; height: auto; display: block; }
+  @keyframes titleFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  #titleWrap.float img { animation: titleFloat 4.5s ease-in-out infinite; }
+
+  /* ---------- 右上角相机 / 右下角家长入口 ---------- */
+  .corner-btn {
+    position: fixed; z-index: 6; background: none; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.55; transition: opacity .3s, transform .3s, filter .3s;
+    touch-action: manipulation;
+  }
+  .corner-btn:hover { opacity: 0.85; }
+  .corner-btn svg { display: block; }
+  #camBtn { top: 16px; right: 16px; width: 48px; height: 48px; }
+  #camBtn.bright { opacity: 1; filter: brightness(1.25) drop-shadow(0 0 10px rgba(255,224,150,0.9)); }
+  #parentBtn { bottom: 14px; right: 14px; width: 40px; height: 40px; opacity: 0.38; }
+
+  /* ---------- 家长设置面板 ---------- */
+  #settingsMask {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(58, 50, 40, 0.28); backdrop-filter: blur(3px);
+  }
+  #settingsMask.open { display: flex; }
+  #settings {
+    width: min(88vw, 430px); max-height: 86vh; overflow-y: auto;
+    background: rgba(253,249,240,0.98); border-radius: 30px;
+    box-shadow: 0 18px 60px rgba(120,100,70,0.28);
+    padding: 30px 30px 26px; color: var(--ink);
+  }
+  #settings h2 { font-size: 19px; font-weight: 600; letter-spacing: 2px; text-align: center; color: #7A7264; margin-bottom: 22px; }
+  .set-row { margin-bottom: 20px; }
+  .set-label { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 9px; letter-spacing: 1px; }
+  .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+  .seg button {
+    flex: 1; min-width: 56px; padding: 9px 4px; border: none; border-radius: 16px; cursor: pointer;
+    background: #F0E9DA; color: #8B8272; font-size: 13.5px; font-family: inherit;
+    transition: background .25s, color .25s, box-shadow .25s;
+  }
+  .seg button.on { background: #E8D9BC; color: #6B6047; box-shadow: inset 0 0 0 1.5px #D9C49A; }
+  .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+  .gallery:empty::after { content: "还没有作品"; grid-column: 1 / -1; text-align: center; color: #B7AF9F; font-size: 12.5px; padding: 14px 0; }
+  .gallery img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(140,115,80,0.18); transition: transform .2s; }
+  .gallery img:hover { transform: scale(1.04); }
+  .set-btns { display: flex; gap: 10px; margin-top: 24px; }
+  .set-btns button {
+    flex: 1; padding: 12px 0; border: none; border-radius: 18px; cursor: pointer;
+    font-size: 14px; font-family: inherit; letter-spacing: 2px;
+    background: #F0E9DA; color: #7A7264; transition: background .25s;
+  }
+  .set-btns button:hover { background: #E8DEC8; }
+  .set-btns button.primary { background: #E4D2AC; color: #64583D; }
+  .idea { font-size: 13px; color: #8B8272; line-height: 1.8; }
+  .exportBtn {
+    margin-top: 8px; padding: 8px 16px; border: none; border-radius: 12px; cursor: pointer;
+    background: #EFE8D8; color: #7A7264; font-size: 13px; font-family: inherit;
+  }
+  .exportBtn:active { transform: scale(0.97); }
+
+  /* ---------- 绘画覆盖层 ---------- */
+  #drawOverlay {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(250, 244, 232, 0.97);
+  }
+  #drawOverlay.open { display: flex; }
+  #drawPaper { position: relative; }
+  #drawCanvas {
+    width: min(72vmin, 560px); height: min(72vmin, 560px);
+    background: #FDF8EC; border-radius: 24px;
+    box-shadow: 0 14px 44px rgba(140, 115, 80, 0.24), inset 0 0 0 3px rgba(190, 170, 130, 0.35);
+    touch-action: none; cursor: crosshair;
+  }
+  #drawPalette { position: absolute; left: -8px; top: 50%; transform: translate(-100%, -50%); display: flex; flex-direction: column; gap: 14px; }
+  #drawPalette .ink {
+    width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 8px rgba(120, 100, 70, 0.3); cursor: pointer; transition: transform .2s;
+  }
+  #drawPalette .ink.on { transform: scale(1.28); }
+  #drawTools {
+    position: absolute; right: -14px; top: 50%; transform: translate(100%, -50%);
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  #drawTools .tool {
+    width: 40px; height: 40px; border-radius: 14px; border: none; cursor: pointer;
+    background: #F5EEDD; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(120, 100, 70, 0.18); transition: transform .15s, background .15s;
+  }
+  #drawTools .tool.on { background: #E8D9BC; transform: scale(1.12); }
+  #drawOk {
+    position: absolute; right: -26px; bottom: -26px; width: 84px; height: 84px;
+    border-radius: 50%; border: none; cursor: pointer; background: #E4C48A;
+    box-shadow: 0 8px 26px rgba(160, 125, 70, 0.4); display: flex; align-items: center; justify-content: center;
+  }
+  #drawOk:active { transform: scale(0.94); }
+  #drawX {
+    position: absolute; left: -14px; top: -14px; width: 44px; height: 44px;
+    border-radius: 50%; border: none; cursor: pointer; background: #EFE8D8;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(120, 100, 70, 0.25);
+    transition: transform .2s, background .2s;
+  }
+  #drawX.arming { transform: scale(0.86); background: #EAD0BE; }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="vignette" class="layer"></div>
+  <div id="duskDim" class="layer"></div>
+  <div id="flash" class="layer"></div>
+  <div id="sweep" class="layer"></div>
+  <div id="cream" class="layer"></div>
+
+  <div id="titleWrap"><img id="titleLogo" alt=""></div>
+
+  <button id="childBtn" class="corner-btn" aria-label="child view" style="top: 128px; right: 16px; width: 48px; height: 48px;">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B9B2A4" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="9" r="3.4"/><path d="M5 20 c 1.5 -4.5 12.5 -4.5 14 0"/>
+    </svg>
+  </button>
+  <button id="resetBtn" class="corner-btn" aria-label="reset" style="top: 72px; right: 16px; width: 48px; height: 48px;">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#B9B2A4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 8 a 9 9 0 1 1 -0.5 6"/><path d="M3.5 3 v 5 h 5"/>
+    </svg>
+  </button>
+  <button id="camBtn" class="corner-btn" aria-label="camera">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="#B9B2A4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.2" y="8.4" width="23.6" height="16.2" rx="4.5"/>
+      <path d="M10.5 8.2 L12.4 5.2 Q13 4.3 14.2 4.3 L16.6 4.3 Q17.8 4.3 18.4 5.2 L20.3 8.2"/>
+      <circle cx="15" cy="16.4" r="4.6"/>
+      <circle cx="22.6" cy="12.1" r="0.8" fill="#B9B2A4" stroke="none"/>
+    </svg>
+  </button>
+
+  <button id="parentBtn" class="corner-btn" aria-label="parent">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#AFA899" stroke-width="1.7" stroke-linecap="round">
+      <circle cx="12" cy="12" r="8.2"/>
+      <path d="M12 7.4 V12 L15.2 14"/>
+    </svg>
+  </button>
+
+  <div id="settingsMask">
+    <div id="settings">
+      <h2>家长设置</h2>
+      <div class="set-row">
+        <div class="set-label">音效</div>
+        <div class="seg" id="segSound">
+          <button data-v="on">开</button><button data-v="off">关</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="set-label">连续游玩时长（到时后太阳缓缓落山，温柔提示休息）</div>
+        <div class="seg" id="segTime">
+          <button data-v="10">10分钟</button><button data-v="20">20分钟</button>
+          <button data-v="30">30分钟</button><button data-v="0">不限</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="set-label">光影作品（点击可保存到相册）</div>
+        <div class="gallery" id="gallery"></div>
+        <div class="set-btns" style="margin-top:10px">
+          <button id="clearShots">清空作品</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <div class="set-label">共玩小点子（问孩子开放式问题，不评判对错）</div>
+        <div class="idea">· 如果让太阳慢慢落下去，影子会变成什么样？</div>
+        <div class="idea">· 把两张玻璃纸叠在一起，房间会变成什么颜色？</div>
+        <div class="idea">· 试试让影子和它的小主人碰在一起？</div>
+        <div class="idea">· 拉一下绳子，幕布后面的光变了多少？</div>
+      </div>
+      <div class="set-row">
+        <div class="set-label">本次记录</div>
+        <div class="idea" id="sessionRecap">—</div>
+      </div>
+      <div class="set-row">
+        <div class="set-label">累计观察（教师/家长参考）</div>
+        <div class="idea" id="teacherStats">—</div>
+        <div class="idea" id="teacherStats2">—</div>
+        <button id="exportReport" class="exportBtn">导出观察报告</button>
+      </div>
+      <div class="set-btns">
+        <button id="previewNight">预览月夜</button>
+        <button id="restoreDay">恢复白天</button>
+        <button id="resetAll">重新开始</button>
+        <button id="closeSettings" class="primary">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 绘画覆盖层（魔法画纸） -->
+  <div id="drawOverlay">
+    <div id="drawPaper">
+      <canvas id="drawCanvas" width="512" height="512"></canvas>
+      <div id="drawPalette">
+        <button class="ink on" data-c="#4A443C" style="background:#4A443C"></button>
+        <button class="ink" data-c="#C97B6E" style="background:#C97B6E"></button>
+        <button class="ink" data-c="#7E9B6E" style="background:#7E9B6E"></button>
+        <button class="ink" data-c="#6E89A8" style="background:#6E89A8"></button>
+      </div>
+      <button id="drawX" aria-label="cancel">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#9A9284" stroke-width="2.6" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+      </button>
+      <div id="drawTools">
+        <button class="tool on" data-t="brush" title="">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2" stroke-linecap="round"><path d="M4 20 c 4 1 6 -2 5 -4 c 3 1 10 -8 12 -12 c -4 2 -13 9 -12 12 c -2 -1 -5 1 -5 4 z"/></svg>
+        </button>
+        <button class="tool" data-t="circle">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
+        </button>
+        <button class="tool" data-t="triangle">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2" stroke-linejoin="round"><path d="M12 4 L21 19 L3 19 z"/></svg>
+        </button>
+        <button class="tool" data-t="square">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+        </button>
+        <button class="tool" data-t="star">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2" stroke-linejoin="round"><path d="M12 3 l2.6 5.6 6.1 0.7 -4.5 4.2 1.2 6 -5.4 -3 -5.4 3 1.2 -6 -4.5 -4.2 6.1 -0.7 z"/></svg>
+        </button>
+        <button class="tool" data-t="heart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6E675C" stroke-width="2" stroke-linejoin="round"><path d="M12 20 c -6 -4 -8.5 -8 -8.5 -11 a 4.3 4.3 0 0 1 8.5 -1.2 a 4.3 4.3 0 0 1 8.5 1.2 c 0 3 -2.5 7 -8.5 11 z"/></svg>
+        </button>
+      </div>
+      <button id="drawOk" aria-label="done">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#FFFDF4" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 L10 18 L19.5 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/game.js?v=22"></script>
+</body>
+</html>
